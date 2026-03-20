@@ -1,0 +1,26 @@
+{
+  "name": "reflexion-fusion",
+  "version": "0.1.0",
+  "description": "Skill-Creator + Reflexion fusion plugin for Claude Code — automatic skill lifecycle",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "vitest run --no-cache",
+    "test:watch": "vitest watch",
+    "test:coverage": "vitest run --no-cache --coverage",
+    "install-plugin": "node bin/install.mjs",
+    "uninstall-plugin": "node bin/install.mjs --uninstall"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "sqlite-vec": "^0.1.0",
+    "@xenova/transformers": "^2.17.0"
+  },
+  "devDependencies": {
+    "vitest": "^2.0.0",
+    "@vitest/coverage-v8": "^2.0.0"
+  },
+  "license": "MIT"
+}

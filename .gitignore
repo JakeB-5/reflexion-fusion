@@ -1,0 +1,9 @@
+node_modules/
+*.db
+*.db-wal
+*.db-shm
+.env*.local
+coverage/
+*.bak
+/tmp/
+.omc/

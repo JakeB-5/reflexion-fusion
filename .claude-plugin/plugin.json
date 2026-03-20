@@ -1,0 +1,11 @@
+{
+  "name": "reflexion-fusion",
+  "version": "0.1.0",
+  "description": "Automatic skill lifecycle: pattern detection → skill generation → blind evaluation → approved deployment. Fuses Reflexion (pattern analysis) + Skill-Creator (evaluation agents).",
+  "author": {
+    "name": "jin"
+  },
+  "license": "MIT",
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}
