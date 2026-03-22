@@ -39,8 +39,8 @@ function extractJSON(text) {
 function loadExistingSkillNames() {
   try {
     const db = getDb();
-    const rows = db.prepare('SELECT name FROM generated_skills').all();
-    return rows.map(r => r.name);
+    const rows = db.prepare('SELECT skill_name FROM generated_skills').all();
+    return rows.map(r => r.skill_name);
   } catch {
     return [];
   }
@@ -68,6 +68,68 @@ function callClaude(prompt) {
 }
 
 /**
+ * Find an existing generated skill with the same name.
+ * Used as a duplicate detection gate before generating a new skill.
+ *
+ * @param {Object} suggestion - Suggestion from analysis
+ * @returns {{skillName: string, content: string, filePath: string, id: number}|null}
+ */
+export function findExistingSkill(suggestion) {
+  if (!suggestion.skillName) return null;
+
+  try {
+    const db = getDb();
+    const row = db.prepare(
+      'SELECT id, skill_name, file_path FROM generated_skills WHERE skill_name = ? ORDER BY ts DESC LIMIT 1'
+    ).get(suggestion.skillName);
+
+    if (row && existsSync(row.file_path)) {
+      return {
+        skillName: row.skill_name,
+        content: readFileSync(row.file_path, 'utf-8'),
+        filePath: row.file_path,
+        id: row.id,
+      };
+    }
+  } catch {
+    // DB/file errors are non-fatal for dedup check
+  }
+
+  return null;
+}
+
+/**
+ * Regenerate/improve an existing SKILL.md based on evaluation feedback.
+ * Used by the evaluator's improve loop and the duplicate-detection path.
+ *
+ * @param {string} existingContent - Current SKILL.md content
+ * @param {string[]} suggestions - Improvement suggestions from analyzer
+ * @param {string} [revisedDescription] - Optional improved description text
+ * @returns {string} Improved SKILL.md content
+ */
+export function regenerateSkill(existingContent, suggestions = [], revisedDescription) {
+  const prompt = [
+    '아래 SKILL.md의 내용을 개선하세요. 평가 결과 다음과 같은 개선사항이 도출되었습니다.',
+    '',
+    '## 현재 SKILL.md',
+    existingContent,
+    '',
+    '## 개선 제안',
+    ...suggestions.map((s, i) => `${i + 1}. ${s}`),
+    '',
+    ...(revisedDescription ? ['## 개선된 설명', revisedDescription, ''] : []),
+    '## 지시사항',
+    '- 기존 스킬의 name과 핵심 목적을 유지하세요.',
+    '- 개선 제안을 반영하여 description, 감지된 패턴, 지시사항을 개선하세요.',
+    '- YAML frontmatter 형식을 유지하세요 (---로 시작/끝).',
+    '- 개선된 SKILL.md 전체 내용만 출력하세요 (설명 없이).',
+  ].join('\n');
+
+  const rawOutput = callClaude(prompt);
+  return extractSkillContent(rawOutput);
+}
+
+/**
  * Generate a SKILL.md file from a suggestion via Claude headless.
  * Saves the file to ~/.reflexion-fusion/generated/<name>.md and records it in DB.
  *
@@ -78,6 +140,28 @@ function callClaude(prompt) {
  */
 export async function generateSkill(suggestion, examplePrompts = [], exampleTools = []) {
   const existingSkills = loadExistingSkillNames();
+
+  // Duplicate detection: improve existing skill instead of creating new
+  const existing = findExistingSkill(suggestion);
+  if (existing) {
+    const improvedContent = regenerateSkill(
+      existing.content,
+      [suggestion.summary || suggestion.action || 'Improve based on new pattern analysis'],
+    );
+    writeFileSync(existing.filePath, improvedContent, 'utf-8');
+
+    // Bump version in DB
+    try {
+      const db = getDb();
+      db.prepare(
+        'UPDATE generated_skills SET ts = ?, version = version + 1 WHERE id = ?'
+      ).run(new Date().toISOString(), existing.id);
+    } catch {
+      // Non-fatal
+    }
+
+    return { filePath: existing.filePath, skillName: existing.skillName, content: improvedContent };
+  }
 
   // Build prompt from template
   let template = readFileSync(SKILL_TEMPLATE, 'utf-8');
@@ -111,12 +195,8 @@ export async function generateSkill(suggestion, examplePrompts = [], exampleTool
   try {
     const db = getDb();
     db.prepare(`
-      INSERT INTO generated_skills (ts, name, file_path, suggestion_id, deployed)
+      INSERT INTO generated_skills (ts, skill_name, file_path, suggestion_id, deployed)
       VALUES (?, ?, ?, ?, 0)
-      ON CONFLICT(name) DO UPDATE SET
-        ts = excluded.ts,
-        file_path = excluded.file_path,
-        suggestion_id = excluded.suggestion_id
     `).run(new Date().toISOString(), skillName, filePath, suggestion.id || null);
   } catch {
     // DB insert failure is non-fatal — file is already written

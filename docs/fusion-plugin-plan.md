@@ -84,7 +84,7 @@ Deep Interview 스펙 기반 (모호도 17%):
 |-----------|--------|------|---------------|
 | **v0.1 — 수집 + 분석 + 생성** | Phase 0-3 | 데이터 수집, 패턴 감지, 스킬/규칙/Hook 초안 생성 | 이벤트 DB 기록, 분석 캐시 생성, SKILL.md 초안 출력 |
 | **v0.2 — 평가 + 승인 배포** | Phase 4-5 | 2단계 평가 게이트, 사용자 승인 후 배포 | 블라인드 비교 pass, `/suggest`로 승인→배포 동작 |
-| **v0.3 — UI + MCP + E2E** | Phase 6-8 | 스킬 UI, MCP 서버, 전체 E2E | 전체 파이프라인 동작, 80%+ 커버리지 |
+| **v0.3 — UI + E2E** | Phase 6-8 | 스킬 UI, 전체 E2E | 전체 파이프라인 동작, 80%+ 커버리지 |
 
 ---
 
@@ -94,7 +94,7 @@ Deep Interview 스펙 기반 (모호도 17%):
 ~/projects/reflexion-fusion/          # 새 프로젝트 루트
 ├── .claude-plugin/
 │   └── plugin.json                   # 플러그인 매니페스트 (Phase 0에서 규격 검증)
-├── .mcp.json                         # MCP 서버 등록
+├── # (.mcp.json 제거됨 — MCP 불필요, 스킬이 PRIMARY UI)
 ├── hooks/
 │   └── hooks.json                    # Hook 등록 정의 (플러그인 규격)
 ├── bin/
@@ -136,8 +136,7 @@ Deep Interview 스펙 기반 (모호도 17%):
 │   ├── prompts/                      # AI 프롬프트 템플릿
 │   │   ├── analyze.md               # 패턴 분석 프롬프트
 │   │   └── generate-skill.md        # 스킬 생성 프롬프트
-│   └── mcp/                          # MCP 서버
-│       └── server.mjs               # 온디맨드 CLI 도구 제공
+│   # (mcp/ 제거됨 — 스킬이 PRIMARY UI, MCP 불필요)
 ├── tests/                            # 테스트 (Vitest)
 │   ├── unit/
 │   │   ├── db.test.mjs

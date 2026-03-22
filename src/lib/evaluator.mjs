@@ -2,7 +2,7 @@
 // Evaluation orchestrator — 2-stage gate strategy (validation → blind grading)
 
 import { execSync } from 'child_process';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { getDb } from './db.mjs';
@@ -384,10 +384,25 @@ export async function evaluateSkill(skillFilePath, options = {}) {
       break;
     }
 
-    // verdict === 'improve': run analyzer and loop
+    // verdict === 'improve': run analyzer, regenerate skill, and loop
     setStatus(db, evalId, 'analyzing');
     finalAnalysis = analyzeFailure(skillContent, gradingResults, comparison);
     finalVerdict = 'improve';
+
+    // Regenerate skill content based on analyzer feedback
+    if (finalAnalysis && finalAnalysis.suggestions && finalAnalysis.suggestions.length > 0) {
+      try {
+        const { regenerateSkill } = await import('./skill-generator.mjs');
+        skillContent = regenerateSkill(
+          skillContent,
+          finalAnalysis.suggestions,
+          finalAnalysis.revised_description,
+        );
+        writeFileSync(skillFilePath, skillContent, 'utf-8');
+      } catch {
+        // Regeneration failure is non-fatal — continue with current content
+      }
+    }
 
     if (iteration >= MAX_ITERATIONS) break;
     iteration++;
