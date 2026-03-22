@@ -1,7 +1,7 @@
 // src/lib/feedback-tracker.mjs
 // Suggestion feedback recording and analytics
 
-import { getDb, insertEvent } from '../lib/db.mjs';
+import { getDb, insertEvent } from './db.mjs';
 
 /**
  * Record suggestion feedback (accepted / rejected / dismissed).

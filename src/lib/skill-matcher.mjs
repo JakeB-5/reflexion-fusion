@@ -3,7 +3,7 @@
 
 import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { getDb, vectorSearch, generateEmbeddings } from '../lib/db.mjs';
+import { getDb, vectorSearch, generateEmbeddings } from './db.mjs';
 
 /**
  * Load skill .md files from global (~/.claude/commands/) and project (.claude/commands/) dirs.

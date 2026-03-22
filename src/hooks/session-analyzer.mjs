@@ -24,8 +24,7 @@ try {
         msg += `- [${s.type}] ${s.summary} [id: ${s.id}]\n`;
       }
       msg += '\n사용자에게 이 개선 제안을 알려주세요.';
-      msg += '\n사용자가 승인하면 `node ~/.reflexion-fusion/bin/apply.mjs <번호>` 로 적용하세요.';
-      msg += '\n사용자가 거부하면 `node ~/.reflexion-fusion/bin/dismiss.mjs <id>` 로 기록하세요.';
+      msg += '\n`/suggest`로 제안 목록을 확인하고 승인/거부할 수 있습니다.';
       contextParts.push(msg);
     }
   } catch {

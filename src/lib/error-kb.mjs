@@ -1,7 +1,7 @@
 // src/lib/error-kb.mjs
 // Error Knowledge Base — normalize error text, 3-stage search, record resolutions
 
-import { getDb, vectorSearch, generateEmbeddings } from '../lib/db.mjs';
+import { getDb, vectorSearch, generateEmbeddings } from './db.mjs';
 
 /**
  * Normalize error text for deduplication and search.

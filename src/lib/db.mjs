@@ -216,7 +216,7 @@ export function initDb(db) {
       WHEN NEW.type IN ('prompt', 'tool_error')
       BEGIN
         INSERT INTO events_fts(rowid, type, text)
-        VALUES (NEW.id, NEW.type, json_extract(NEW.data, '$.text'));
+        VALUES (NEW.id, NEW.type, COALESCE(json_extract(NEW.data, '$.text'), json_extract(NEW.data, '$.error')));
       END;
     `);
   } catch { /* ignore */ }

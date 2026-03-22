@@ -3,9 +3,12 @@
 // Hook: SessionEnd — compute session summary, trigger async analysis + batch embeddings
 // Timeout: 10s
 
-import { insertEvent, queryEvents, getProjectName, getProjectPath, readStdin, isEnabled, pruneOldEvents, GLOBAL_DIR } from '../lib/db.mjs';
-import { join } from 'node:path';
+import { insertEvent, queryEvents, getProjectName, getProjectPath, readStdin, isEnabled, pruneOldEvents } from '../lib/db.mjs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+
+const __hookDir = dirname(fileURLToPath(import.meta.url));
 
 try {
   const input = await readStdin();
@@ -63,7 +66,7 @@ try {
   // Trigger async AI analysis if enough prompts accumulated
   if (!skipAnalysis && prompts.length >= 5) {
     try {
-      const analyzeScript = join(GLOBAL_DIR, 'bin', 'analyze.mjs');
+      const analyzeScript = join(__hookDir, '..', '..', 'bin', 'analyze-runner.mjs');
       const child = spawn('node', [analyzeScript, '--days', '7', '--project', project, '--project-path', projectPath], {
         detached: true,
         stdio: 'ignore'
@@ -76,7 +79,7 @@ try {
 
   // Trigger batch embeddings (detached, always)
   try {
-    const batchScript = join(GLOBAL_DIR, 'lib', 'batch-embeddings.mjs');
+    const batchScript = join(__hookDir, '..', 'lib', 'batch-embeddings.mjs');
     const batchChild = spawn('node', [batchScript, projectPath], {
       detached: true,
       stdio: 'ignore'
