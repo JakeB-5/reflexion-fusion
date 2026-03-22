@@ -22,6 +22,11 @@ description: |
 - 1회 평가 당 약 50K-100K 토큰 (sonnet 기준)
 - 프로젝트당 일 5회 제한
 
+## 내부 API
+- `evaluateSkill(filePath, options)` — 파일 경로 기반 평가 (Stage 1 → Stage 2)
+- `evaluateOnDemand(skillName, options)` — 스킬 이름으로 DB 조회 후 평가
+- `checkDailyLimit(projectPath)` — 일일 평가 한도 확인
+
 ## 주의
 - Stage 2 평가는 Claude API를 사용합니다
 - `/suggest`로 먼저 제안 목록을 확인하세요

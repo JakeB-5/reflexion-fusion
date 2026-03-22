@@ -498,17 +498,11 @@ YAML frontmatter (name, description, compatibility) + Markdown body
 - 시스템 건강 상태 (DB 크기, 임베딩 데몬, 캐시 히트율)
 - 일일 평가 사용량 / 한도
 
-### Phase 7: MCP Server
+### ~~Phase 7: MCP Server~~ (제거됨)
 
-**Step 7.1: MCP 서버 (`src/mcp/server.mjs`)**
-
-> MCP 서버는 프로그래밍 방식 접근용. `/suggest` 스킬이 PRIMARY UI.
-
-- `analyze` — 온디맨드 분석 실행
-- `list-suggestions` — 제안 목록 (미승인만)
-- `approve-suggestion` — 제안 승인 → 배포
-- `dismiss-suggestion` — 제안 거부
-- `status` — 시스템 상태
+> v0.2에서 MCP 서버 제거. 스킬(/suggest, /evaluate, /fusion-status)이 PRIMARY UI이며,
+> MCP는 스킬과 100% 기능 중복이므로 불필요한 복잡도로 판단하여 삭제.
+> 관련 파일: src/mcp/server.mjs, .mcp.json 삭제 완료.
 
 ### Phase 8: E2E Testing & Documentation
 
