@@ -13,15 +13,9 @@ A Claude Code plugin that automatically detects usage patterns, generates skills
 
 ## Installation
 
-### Plugin (recommended)
-
 ```bash
-claude plugin add ~/projects/reflexion-fusion
-```
-
-### Fallback (direct settings.json registration)
-
-```bash
+cd ~/projects/reflexion-fusion
+npm install
 node bin/install.mjs
 ```
 
