@@ -2,7 +2,7 @@
 // Fallback installer — registers hooks in ~/.claude/settings.json
 // Used when Claude Code plugin API is unavailable
 
-import { existsSync, readFileSync, writeFileSync, copyFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, copyFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -110,8 +110,25 @@ function install() {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   }
 
+  // Copy skills to ~/.claude/commands/
+  const skillsDir = join(PROJECT_ROOT, 'skills');
+  const commandsDir = join(process.env.HOME || '', '.claude', 'commands');
+  if (!existsSync(commandsDir)) mkdirSync(commandsDir, { recursive: true });
+
+  let skillCount = 0;
+  if (existsSync(skillsDir)) {
+    for (const skillName of readdirSync(skillsDir)) {
+      const skillFile = join(skillsDir, skillName, 'SKILL.md');
+      if (!existsSync(skillFile)) continue;
+      const targetPath = join(commandsDir, `${skillName}.md`);
+      copyFileSync(skillFile, targetPath);
+      skillCount++;
+    }
+  }
+
   console.log('✅ Reflexion-Fusion 설치 완료');
   console.log(`   훅 ${HOOKS.length}개 등록됨`);
+  console.log(`   스킬 ${skillCount}개 설치됨 → ${commandsDir}`);
   console.log(`   데이터 경로: ${globalDir}`);
 }
 
@@ -136,7 +153,21 @@ async function uninstall(purge = false) {
   }
 
   saveSettings(settings);
-  console.log('✅ Reflexion-Fusion 훅 제거 완료');
+
+  // Remove installed skills from ~/.claude/commands/
+  const skillsDir = join(PROJECT_ROOT, 'skills');
+  const commandsDir = join(process.env.HOME || '', '.claude', 'commands');
+  if (existsSync(skillsDir) && existsSync(commandsDir)) {
+    for (const skillName of readdirSync(skillsDir)) {
+      const targetPath = join(commandsDir, `${skillName}.md`);
+      if (existsSync(targetPath)) {
+        const { unlinkSync } = await import('node:fs');
+        unlinkSync(targetPath);
+      }
+    }
+  }
+
+  console.log('✅ Reflexion-Fusion 훅 + 스킬 제거 완료');
 
   if (purge) {
     const globalDir = join(process.env.HOME || '', '.reflexion-fusion');
