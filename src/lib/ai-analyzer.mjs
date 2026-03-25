@@ -99,14 +99,41 @@ async function buildPrompt(logSummary, days, project, projectPath) {
 
 /**
  * Extract JSON block from Claude response.
- * Handles ```json ... ``` fenced blocks or raw JSON objects.
+ * Handles ```json ... ``` fenced blocks or balanced brace matching.
+ * Resilient to noisy output from other plugins mixed into stdout.
  */
 function extractJSON(text) {
-  // Prefer fenced ```json block
+  // Prefer fenced ```json block (most reliable)
   const fenced = text.match(/```json\s*([\s\S]*?)\s*```/);
-  if (fenced) return fenced[1];
+  if (fenced) {
+    try { JSON.parse(fenced[1]); return fenced[1]; } catch { /* fall through */ }
+  }
 
-  // Fallback: first {...} object in response
+  // Balanced brace extraction: find the first { and match balanced braces
+  const start = text.indexOf('{');
+  if (start === -1) return text;
+
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') depth++;
+    if (ch === '}') {
+      depth--;
+      if (depth === 0) {
+        const candidate = text.slice(start, i + 1);
+        try { JSON.parse(candidate); return candidate; } catch { /* try next */ }
+      }
+    }
+  }
+
+  // Last resort: greedy match
   const raw = text.match(/\{[\s\S]*\}/);
   return raw ? raw[0] : text;
 }
