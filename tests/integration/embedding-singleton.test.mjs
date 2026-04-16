@@ -2,8 +2,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createServer } from 'node:net';
 import { existsSync, unlinkSync, writeFileSync, readFileSync } from 'node:fs';
+import { exec, execSync } from 'node:child_process';
+import { acquirePidLock, releasePidLock } from '../../src/lib/pid-lock.mjs';
 import { isServerRunning, startServer } from '../../src/lib/embedding-client.mjs';
-import { execSync } from 'node:child_process';
 
 const SOCKET_PATH = '/tmp/reflexion-fusion-embed.sock';
 const PID_PATH = '/tmp/reflexion-fusion-embed.pid';
@@ -24,7 +25,7 @@ function createMockServer() {
           }
         } catch { conn.end('{}'); }
       });
-      conn.on('error', () => { /* ignore client disconnect */ });
+      conn.on('error', () => {});
     });
     if (existsSync(SOCKET_PATH)) unlinkSync(SOCKET_PATH);
     srv.listen(SOCKET_PATH, () => resolve(srv));
@@ -36,7 +37,86 @@ function cleanup() {
   try { if (existsSync(PID_PATH)) unlinkSync(PID_PATH); } catch {}
 }
 
+function countEmbedProcesses() {
+  try {
+    const out = execSync('pgrep -f "embedding-server.mjs" 2>/dev/null || true', { encoding: 'utf8' });
+    return out.trim().split('\n').filter(Boolean).length;
+  } catch { return 0; }
+}
+
+describe('pid-lock', () => {
+  beforeEach(() => cleanup());
+  afterEach(() => cleanup());
+
+  it('acquires lock on clean state', () => {
+    expect(acquirePidLock(PID_PATH)).toBe(true);
+    expect(existsSync(PID_PATH)).toBe(true);
+    expect(readFileSync(PID_PATH, 'utf8').trim()).toBe(String(process.pid));
+  });
+
+  it('rejects when holder is alive', () => {
+    writeFileSync(PID_PATH, String(process.pid), 'utf8');
+    expect(acquirePidLock(PID_PATH)).toBe(false);
+  });
+
+  it('steals lock from dead holder', () => {
+    writeFileSync(PID_PATH, '99999999', 'utf8');
+    expect(acquirePidLock(PID_PATH)).toBe(true);
+    expect(readFileSync(PID_PATH, 'utf8').trim()).toBe(String(process.pid));
+  });
+
+  it('steals lock from corrupt PID file', () => {
+    writeFileSync(PID_PATH, 'not-a-number', 'utf8');
+    expect(acquirePidLock(PID_PATH)).toBe(true);
+  });
+
+  it('steals lock from empty PID file', () => {
+    writeFileSync(PID_PATH, '', 'utf8');
+    expect(acquirePidLock(PID_PATH)).toBe(true);
+  });
+
+  it('releases lock', () => {
+    acquirePidLock(PID_PATH);
+    expect(existsSync(PID_PATH)).toBe(true);
+    releasePidLock(PID_PATH);
+    expect(existsSync(PID_PATH)).toBe(false);
+  });
+
+  it('concurrent O_EXCL attempts yield exactly one winner', async () => {
+    const tmpScript = '/tmp/reflexion-fusion-lock-test.cjs';
+    writeFileSync(tmpScript, `
+      const { openSync, writeSync, closeSync, constants } = require('fs');
+      try {
+        const fd = openSync('${PID_PATH}', constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o644);
+        writeSync(fd, String(process.pid));
+        closeSync(fd);
+        process.stdout.write('won');
+      } catch (e) {
+        process.stdout.write(e.code === 'EEXIST' ? 'lost' : 'error:' + e.code);
+      }
+    `);
+
+    const N = 5;
+    const results = await Promise.all(
+      Array.from({ length: N }, () =>
+        new Promise((resolve) => {
+          exec(`node ${tmpScript}`, (err, stdout) => {
+            resolve(stdout.trim());
+          });
+        })
+      )
+    );
+
+    try { unlinkSync(tmpScript); } catch {}
+
+    expect(results.filter(r => r === 'won').length).toBe(1);
+    expect(results.filter(r => r === 'lost').length).toBe(N - 1);
+    expect(results.filter(r => r.startsWith('error')).length).toBe(0);
+  }, 15000);
+});
+
 describe('embedding-server singleton', () => {
+  beforeEach(() => cleanup());
   afterEach(() => cleanup());
 
   it('isServerRunning returns true when a healthy server exists', async () => {
@@ -50,7 +130,6 @@ describe('embedding-server singleton', () => {
   });
 
   it('isServerRunning returns false when no server exists', async () => {
-    cleanup();
     const running = await isServerRunning();
     expect(running).toBe(false);
   });
@@ -60,7 +139,6 @@ describe('embedding-server singleton', () => {
     try {
       const before = countEmbedProcesses();
       await startServer();
-      // Small delay to allow any inadvertent spawn to register
       await new Promise(r => setTimeout(r, 500));
       const after = countEmbedProcesses();
       expect(after).toBe(before);
@@ -68,25 +146,4 @@ describe('embedding-server singleton', () => {
       mock.close();
     }
   });
-
-  it('PID file is written on server start and cleaned up', async () => {
-    cleanup();
-    // Write a fake PID file to simulate stale state
-    writeFileSync(PID_PATH, '99999999', 'utf8');
-    expect(existsSync(PID_PATH)).toBe(true);
-
-    // Verify we can read it
-    const pid = readFileSync(PID_PATH, 'utf8').trim();
-    expect(pid).toBe('99999999');
-
-    cleanup();
-    expect(existsSync(PID_PATH)).toBe(false);
-  });
 });
-
-function countEmbedProcesses() {
-  try {
-    const out = execSync('pgrep -f "embedding-server.mjs" 2>/dev/null || true', { encoding: 'utf8' });
-    return out.trim().split('\n').filter(Boolean).length;
-  } catch { return 0; }
-}

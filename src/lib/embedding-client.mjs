@@ -8,7 +8,7 @@ import { join, dirname } from 'node:path';
 
 const SOCKET_PATH = '/tmp/reflexion-fusion-embed.sock';
 const EMBED_TIMEOUT_MS = 10000; // 10 seconds
-const HEALTH_TIMEOUT_MS = 500;  // 500 ms for quick health probe
+const HEALTH_TIMEOUT_MS = 3000; // 3s — inference can block health responses
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SERVER_PATH = join(__dirname, 'embedding-server.mjs');
@@ -80,9 +80,15 @@ export async function isServerRunning() {
   });
 }
 
+let _lastSpawnTime = 0;
+const SPAWN_COOLDOWN_MS = 5000;
+
 // Spawn the embedding server as a detached background process (no-op if already running)
 export async function startServer() {
   if (await isServerRunning()) return;
+  const now = Date.now();
+  if (now - _lastSpawnTime < SPAWN_COOLDOWN_MS) return;
+  _lastSpawnTime = now;
   const child = spawn('node', [SERVER_PATH], {
     detached: true,
     stdio: 'ignore',
