@@ -80,8 +80,9 @@ export async function isServerRunning() {
   });
 }
 
-// Spawn the embedding server as a detached background process
+// Spawn the embedding server as a detached background process (no-op if already running)
 export async function startServer() {
+  if (await isServerRunning()) return;
   const child = spawn('node', [SERVER_PATH], {
     detached: true,
     stdio: 'ignore',

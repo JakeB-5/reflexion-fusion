@@ -2,12 +2,13 @@
 // Loads Xenova/paraphrase-multilingual-MiniLM-L12-v2, handles embed/health actions
 // Auto-shuts down after 30 minutes of idle
 
-import { createServer } from 'node:net';
-import { existsSync, unlinkSync } from 'node:fs';
+import { createServer, createConnection } from 'node:net';
+import { existsSync, unlinkSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { pipeline, env } from '@xenova/transformers';
 
 const SOCKET_PATH = '/tmp/reflexion-fusion-embed.sock';
+const PID_PATH = '/tmp/reflexion-fusion-embed.pid';
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 const MODELS_DIR = join(process.env.HOME || '', '.reflexion-fusion', 'models');
 
@@ -48,10 +49,57 @@ async function init() {
   process.stderr.write('[embedding-server] Model ready\n');
 }
 
-// Remove stale socket file from a previous run
+function healthCheck() {
+  return new Promise((resolve) => {
+    if (!existsSync(SOCKET_PATH)) return resolve(false);
+    const conn = createConnection(SOCKET_PATH);
+    const timer = setTimeout(() => { conn.destroy(); resolve(false); }, 1000);
+    conn.on('connect', () => {
+      conn.write(JSON.stringify({ action: 'health' }) + '\n');
+    });
+    let data = '';
+    conn.on('data', (chunk) => { data += chunk; });
+    conn.on('end', () => {
+      clearTimeout(timer);
+      try { resolve(JSON.parse(data.trim()).status === 'ok'); }
+      catch { resolve(false); }
+    });
+    conn.on('error', () => { clearTimeout(timer); resolve(false); });
+  });
+}
+
+function killStalePid() {
+  if (!existsSync(PID_PATH)) return;
+  try {
+    const pid = parseInt(readFileSync(PID_PATH, 'utf8').trim(), 10);
+    if (pid && !isNaN(pid)) {
+      try { process.kill(pid, 0); process.kill(pid, 'SIGTERM'); }
+      catch { /* already dead */ }
+    }
+  } catch { /* corrupt pid file */ }
+  try { rmSync(PID_PATH); } catch { /* ignore */ }
+}
+
+function writePidFile() {
+  writeFileSync(PID_PATH, String(process.pid), 'utf8');
+}
+
+function cleanupPidFile() {
+  try { rmSync(PID_PATH); } catch { /* ignore */ }
+}
+
+// Defer to existing healthy instance
+if (await healthCheck()) {
+  process.stderr.write('[embedding-server] Healthy instance already running. Exiting.\n');
+  process.exit(0);
+}
+
+// No healthy instance — clean up stale state
+killStalePid();
 if (existsSync(SOCKET_PATH)) unlinkSync(SOCKET_PATH);
 
 await init();
+writePidFile();
 
 const server = createServer((conn) => {
   resetIdleTimer(server);
@@ -82,6 +130,7 @@ const server = createServer((conn) => {
 server.on('error', (e) => {
   if (e.code === 'EADDRINUSE') {
     process.stderr.write('[embedding-server] Socket already in use, another instance running. Exiting.\n');
+    cleanupPidFile();
     process.exit(0);
   }
   throw e;
@@ -92,6 +141,6 @@ server.listen(SOCKET_PATH, () => {
   resetIdleTimer(server);
 });
 
-const shutdown = () => { server.close(); process.exit(0); };
+const shutdown = () => { cleanupPidFile(); server.close(); process.exit(0); };
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
